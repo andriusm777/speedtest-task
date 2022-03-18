@@ -1,0 +1,7 @@
+{
+  "services/speedtest": {
+    "title": "SpeedTest",
+    "view": "vuci-app-speedtest-dev",
+    "index": 30
+  }
+}
