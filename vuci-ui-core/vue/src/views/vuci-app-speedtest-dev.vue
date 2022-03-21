@@ -1,66 +1,64 @@
 <template>
   <div class="container">
-    <div v-if="hasSpeedtestStarted">
-      <a-row type="flex" justify="space-around" class="test" align="middle">
-        <a-col :span="12">
-          <div class="speed-card-container">
-            <div class="speed-card">
-              <div class="speed-card-title">
-                <span class="speed-card-title-text">Download</span>
-              </div>
-              <div class="speed-card-value">
-                <span class="speed-card-value-text">565</span>
-              </div>
-              <div class="speed-card-unit">
-                <span class="speed-card-unit-text">Mbps</span>
-              </div>
-            </div>
+    <div class="speed-card-container">
+      <div class="speed-card">
+        <div class="speed-card-title">
+          <span class="speed-card-title-text">Download</span>
+        </div>
+        <div class="speed-card-value">
+          <span class="speed-card-value-text">565</span>
+        </div>
+        <div class="speed-card-unit">
+          <span class="speed-card-unit-text">Mbps</span>
+        </div>
+      </div>
 
-            <div class="speed-card">
-              <div class="speed-card-title">
-                <span class="speed-card-title-text">Upload</span>
-              </div>
-              <div class="speed-card-value">
-                <span class="speed-card-value-text">400</span>
-              </div>
-              <div class="speed-card-unit">
-                <span class="speed-card-unit-text">Mbps</span>
-              </div>
-            </div>
+      <div class="pre-speed-user-data">
+        <div class="pre-speed-user-logo">
+          <a-icon type="global" :style="{ fontSize: '21px'}"/>
+        </div>
+        <div v-if="isUserConnected" class="pre-speed-user-data-info">
+          <span>{{userLocationData.country_name}}</span>
+          <span>{{userLocationData.ip}}</span>
+        </div>
 
-            <div class="speed-card">
-              <div class="speed-card-title">
-                <span class="speed-card-title-text">Ping</span>
-              </div>
-              <div class="speed-card-value">
-                <span class="speed-card-value-text">20</span>
-              </div>
-              <div class="speed-card-unit">
-                <span class="speed-card-unit-text">ms</span>
-              </div>
-            </div>
-          </div>
+        <div v-else class="pre-speed-user-data-info">
+          <span>Unknown</span>
+        </div>
+      </div>
 
-        </a-col>
-
-        <a-col :span="12">
-          <div justify="center" align="middle">
-            <a-progress type="circle" :percent="100" :width="200"/>
-          </div>
-        </a-col>
-      </a-row>
-
-      <!-- <a-row type="flex" justify="space-around" class="test" align="middle">
-        <a-col :span="12">
-          <div justify="center" align="middle">
-            <a-button type="primary">
-              Start
-            </a-button>
-          </div>
-        </a-col>
-      </a-row> -->
+      <div class="speed-card">
+        <div class="speed-card-title">
+          <span class="speed-card-title-text">Upload</span>
+        </div>
+        <div class="speed-card-value">
+          <span class="speed-card-value-text">400</span>
+        </div>
+        <div class="speed-card-unit">
+          <span class="speed-card-unit-text">Mbps</span>
+        </div>
+      </div>
     </div>
-    <div v-else class="pre-speed-container">
+    <div class="speed-status">
+      <span v-if="speedtestStatusMessage !== ''" class="speed-status-message">{{speedtestStatusMessage}}</span>
+      <span v-else>Start speedtest</span>
+    </div>
+    <div class="speed-speedometer">
+      <a-progress type="circle" :percent="100" :width="200"/>
+    </div>
+
+    <div class="speed-actions">
+      <a-button :disabled="!isUserConnected" shape="round" size="large" type="primary" ghost @click="startSpeedtest">Start</a-button>
+
+      <a-button :disabled="!isUserConnected" shape="round" size="large" @click="startSpeedtest">Servers</a-button>
+    </div>
+
+    <div v-if="!isUserConnected" class="pre-speed-error">
+      <a-icon type="exclamation-circle" :style="{ fontSize: '21px', color: '#ff3333'}"/>
+      <span class="pre-speed-error-text">Connection cannot be established</span>
+    </div>
+
+    <!-- <div v-if="userLocationData === 'ke'" class="pre-speed-container">
         <div class="pre-speed-title">
           <span class="pre-speed-title-main">Speedtest</span>
           <span v-if="isUserConnected" class="pre-speed-title-desc">To begin the speedtest please click the start button</span>
@@ -73,15 +71,14 @@
             <a-icon type="global" :style="{ fontSize: '21px'}"/>
           </div>
           <div class="pre-speed-user-data-info">
-            <span>{{userLocationData.org}}</span>
-            <span>{{userLocationData.ip}}</span>
+            <span>{{userLocationData.country_name}}</span>
           </div>
         </div>
         <div v-if="!isUserConnected" class="pre-speed-error">
           <a-icon type="exclamation-circle" :style="{ fontSize: '21px', color: '#ff3333'}"/>
           <span class="pre-speed-error-text">Connection cannot be established</span>
         </div>
-    </div>
+    </div> -->
 
   </div>
 </template>
@@ -94,24 +91,26 @@ export default {
       page: 'speedtest',
       hasSpeedtestStarted: false,
       isUserConnected: Boolean,
-      userLocationData: Object
+      userLocationData: Object,
+      speedtestStatusMessage: '',
     }
   },
   methods: {
     startSpeedtest () {
-      if (this.isUserConnected) {
-        this.hasSpeedtestStarted = true
-      }
+      this.hasSpeedtestStarted = true
+      this.userConnectionStatus()
+      this.waitForAction(() => this.isUserConnected !== false).then(() => {
+        alert('user connected!')
+        // this.locateNearestServer()
+        // this.startDownloadTest()
+      })
     },
     getLocation () {
       this.$rpc.call('speedtest-api', 'getLocation', { }).then((response) => {
         console.log('the response data is')
         console.log(response.data)
-        // const joinedStrings = response.data.join('')
-        // console.log(joinedStrings)
         console.log(JSON.parse(response.data))
         this.userLocationData = JSON.parse(response.data)
-        // console.log(JSON.parse(joinedStrings))
       })
     },
     userConnectionStatus () {
@@ -120,11 +119,32 @@ export default {
         console.log(response.connected)
         this.isUserConnected = response.connected
       })
+      this.isUserConnected ? this.speedtestStatusMessage = 'Connected' : this.speedtestStatusMessage = 'Disconnected'
+    },
+    // If action is completed, a resolve callback is fired
+    // Otherwise we give 800ms for the action to complete
+    waitForAction (isFunctonTruthy) {
+      const pollingAction = (resolve) => {
+        if (isFunctonTruthy()) {
+          resolve()
+        } else {
+          setTimeout(() => pollingAction(resolve), 800)
+        }
+      }
+      return new Promise(pollingAction)
+    },
+    locateNearestServer() {
+      this.speedtestStatusMessage = 'Finding nearest server'
+      this.$rpc.call('speedtest-api', 'getServers').then((response) => {
+        console.log(JSON.parse(response))
+        this.filteredServers = response.filter(server => server.city === this.userLocationData.city)
+        this.speedtestStatusMessage = 'Found server'
+      })
     }
   },
   created () {
     this.getLocation()
-    this.userConnectionStatus()
+    // this.userConnectionStatus()
   }
 }
 
@@ -136,15 +156,16 @@ export default {
     height: 100%;
     display: flex;
     flex-direction: column;
-    align-content: center;
+    align-items: center;
     justify-content: center;
+    row-gap: 20px;
   }
 
   .speed-card-container {
     display: flex;
-    flex-direction: column;
-    row-gap: 10px;
+    column-gap: 10px;
     align-items: center;
+    justify-content: center;
   }
 
   .speed-card {
@@ -183,6 +204,22 @@ export default {
   .speed-card-unit-text {
     font-weight: bold;
     color: lightslategrey;
+  }
+
+  /* SPEEDOMETER */
+  .speed-speedometer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ACTIONS */
+
+  .speed-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    column-gap: 50px;
   }
 
   /* PRE SPEEDTEST START SECTION */
