@@ -92,7 +92,10 @@ export default {
       hasSpeedtestStarted: false,
       isUserConnected: Boolean,
       userLocationData: Object,
+      allServers: [],
+      filteredServers: Array,
       speedtestStatusMessage: '',
+      bestServer: ''
     }
   },
   methods: {
@@ -100,13 +103,19 @@ export default {
       this.hasSpeedtestStarted = true
       this.userConnectionStatus()
       this.waitForAction(() => this.isUserConnected !== false).then(() => {
-        alert('user connected!')
-        // this.locateNearestServer()
-        // this.startDownloadTest()
+        // alert('user connected!')
+        if ( this.allServers.length === 0 ) {
+          this.getServers()
+        }
+        this.waitForAction(() => this.allServers.length !== 0).then(() => {
+          // find servers
+          this.startServerOperations(this.filteredServersCountry)
+
+        })
       })
     },
     getLocation () {
-      this.$rpc.call('speedtest-api', 'getLocation', { }).then((response) => {
+      this.$rpc.call('speedtest-api', 'get_location_data', { }).then((response) => {
         console.log('the response data is')
         console.log(response.data)
         console.log(JSON.parse(response.data))
@@ -115,14 +124,14 @@ export default {
     },
     userConnectionStatus () {
       const connectionTestServer = 'www.google.com'
-      this.$rpc.call('speedtest-api', 'connectionStatus', { server: connectionTestServer }).then((response) => {
+      this.$rpc.call('speedtest-api', 'check_connection_status', { server: connectionTestServer }).then((response) => {
         console.log(response.connected)
         this.isUserConnected = response.connected
       })
       this.isUserConnected ? this.speedtestStatusMessage = 'Connected' : this.speedtestStatusMessage = 'Disconnected'
     },
     // If action is completed, a resolve callback is fired
-    // Otherwise we give 800ms for the action to complete
+    // otherwise we give 800ms for the action to complete
     waitForAction (isFunctonTruthy) {
       const pollingAction = (resolve) => {
         if (isFunctonTruthy()) {
@@ -133,17 +142,44 @@ export default {
       }
       return new Promise(pollingAction)
     },
-    locateNearestServer() {
-      this.speedtestStatusMessage = 'Finding nearest server'
-      this.$rpc.call('speedtest-api', 'getServers').then((response) => {
-        console.log(JSON.parse(response))
-        this.filteredServers = response.filter(server => server.city === this.userLocationData.city)
-        this.speedtestStatusMessage = 'Found server'
+    getServers () {
+      this.$rpc.call('speedtest-api', 'get_all_servers').then((response) => {
+        console.log(JSON.parse(response.data))
+        this.allServers = JSON.parse(response.data)
       })
+    },
+    startServerOperations (servers) {
+      this.$rpc.call('speedtest-api', 'find_servers', { servers }).then((response) => {
+        this.speedtestStatusMessage = response.message
+        this.findBestServer()
+      })
+    },
+    findBestServer () {
+      this.$rpc.call('speedtest-api', 'init_best_server_search').then((response) => {
+        console.log(response)
+        if (response.message) {
+          this.getBestServer()
+        }
+      })
+    },
+    getBestServer () {
+      this.$rpc.call('speedtest-api', 'get_best_server').then((response) => {
+        console.log(response)
+        this.speedtestStatusMessage = response.message
+        const data = JSON.parse(response.data)
+        this.bestServer = data[0].server
+        console.log(data[0])
+      })
+    }
+  },
+  computed: {
+    filteredServersCountry() {
+      return this.allServers.filter(provider => provider.country === this.userLocationData.country_name)
     }
   },
   created () {
     this.getLocation()
+    // this.getServers()
     // this.userConnectionStatus()
   }
 }
