@@ -6,7 +6,12 @@
           <span class="speed-card-title-text">Download</span>
         </div>
         <div class="speed-card-value">
-          <span class="speed-card-value-text">565</span>
+          <template v-if="this.downloadResult !== ''">
+            <span class="speed-card-value-text">{{this.downloadResult}}</span>
+          </template>
+          <template v-else>
+            <span class="speed-card-value-text">0</span>
+          </template>
         </div>
         <div class="speed-card-unit">
           <span class="speed-card-unit-text">Mbps</span>
@@ -17,14 +22,16 @@
         <div class="pre-speed-user-logo">
           <a-icon type="global" :style="{ fontSize: '21px'}"/>
         </div>
-        <div v-if="isUserConnected" class="pre-speed-user-data-info">
-          <span>{{userLocationData.country_name}}</span>
-          <span>{{userLocationData.ip}}</span>
+        <div class="pre-speed-user-data-info">
+          <template v-if="hasSpeedtestStarted" >
+            <span>{{userLocationData.country_name}}</span>
+            <span>{{userLocationData.ip}}</span>
+          </template>
+          <template v-else>
+            <span>Unknown</span>
+          </template>
         </div>
 
-        <div v-else class="pre-speed-user-data-info">
-          <span>Unknown</span>
-        </div>
       </div>
 
       <div class="speed-card">
@@ -58,28 +65,6 @@
       <span class="pre-speed-error-text">Connection cannot be established</span>
     </div>
 
-    <!-- <div v-if="userLocationData === 'ke'" class="pre-speed-container">
-        <div class="pre-speed-title">
-          <span class="pre-speed-title-main">Speedtest</span>
-          <span v-if="isUserConnected" class="pre-speed-title-desc">To begin the speedtest please click the start button</span>
-          <span v-else class="pre-speed-title-desc">Make sure you have a stable connection and then click the start button</span>
-        </div>
-
-        <a-button :disabled="!isUserConnected" shape="round" size="large" @click="startSpeedtest">Start</a-button>
-        <div v-if="isUserConnected" class="pre-speed-user-data">
-          <div class="pre-speed-user-logo">
-            <a-icon type="global" :style="{ fontSize: '21px'}"/>
-          </div>
-          <div class="pre-speed-user-data-info">
-            <span>{{userLocationData.country_name}}</span>
-          </div>
-        </div>
-        <div v-if="!isUserConnected" class="pre-speed-error">
-          <a-icon type="exclamation-circle" :style="{ fontSize: '21px', color: '#ff3333'}"/>
-          <span class="pre-speed-error-text">Connection cannot be established</span>
-        </div>
-    </div> -->
-
   </div>
 </template>
 
@@ -95,14 +80,17 @@ export default {
       allServers: [],
       filteredServers: Array,
       speedtestStatusMessage: '',
-      bestServer: ''
+      bestServer: '',
+      downloadResult: ''
     }
   },
   methods: {
     startSpeedtest () {
+      this.downloadResult = ''
       this.hasSpeedtestStarted = true
       this.userConnectionStatus()
-      this.waitForAction(() => this.isUserConnected !== false).then(() => {
+      this.getLocation()
+      this.waitForAction(() => this.isUserConnected !== false && this.userLocationData !== null).then(() => {
         // alert('user connected!')
         if ( this.allServers.length === 0 ) {
           this.getServers()
@@ -111,15 +99,25 @@ export default {
           // find servers
           this.startServerOperations(this.filteredServersCountry)
 
+          this.waitForAction(() => this.bestServer !== '').then(() => {
+            this.startDownloadTest(this.bestServer)
+            setTimeout(() => this.getDownloadResults(), 10000)
+          })
+
         })
       })
     },
     getLocation () {
-      this.$rpc.call('speedtest-api', 'get_location_data', { }).then((response) => {
+      console.log('checking location')
+      this.$rpc.call('speedtest-api', 'get_location_data').then((response) => {
         console.log('the response data is')
         console.log(response.data)
         console.log(JSON.parse(response.data))
         this.userLocationData = JSON.parse(response.data)
+      })
+      console.log('testas rpc')
+      this.$rpc.call('speedtest-api', 'testas', { }).then((response) => {
+        console.log(response)
       })
     },
     userConnectionStatus () {
@@ -146,6 +144,20 @@ export default {
       this.$rpc.call('speedtest-api', 'get_all_servers').then((response) => {
         console.log(JSON.parse(response.data))
         this.allServers = JSON.parse(response.data)
+      })
+    },
+    startDownloadTest (server) {
+      this.$rpc.call('speedtest-api', 'start_download', { server }).then((response) => {
+        console.log(response.message)
+        this.speedtestStatusMessage = response.message
+      })
+    },
+    getDownloadResults () {
+      this.$rpc.call('speedtest-api', 'get_download_results').then((response) => {
+        console.log(response)
+        this.speedtestStatusMessage = response.message
+        const downloadData = parseInt(response.data[0])
+        this.downloadResult = downloadData.toFixed(1)
       })
     },
     startServerOperations (servers) {
@@ -177,11 +189,10 @@ export default {
       return this.allServers.filter(provider => provider.country === this.userLocationData.country_name)
     }
   },
-  created () {
-    this.getLocation()
-    // this.getServers()
-    // this.userConnectionStatus()
-  }
+  // created () {
+  //   // this.getServers()
+  //   // this.userConnectionStatus()
+  // }
 }
 
 </script>

@@ -8,20 +8,64 @@ function M.get_location_data()
   local file = io.open(fileLocationData, 'r')
 
   if file == nil then
-      os.execute('lua /usr/bin/speedtest-backend get_location')
-  else 
-      io.close(file)
+      os.execute("lua /usr/bin/speedtest-backend get_location")
   end
 
-  -- -- Here we read each line in a file and add the read lines to our
-  -- -- lines empty table
   local lines = {}
   for line in io.lines(fileLocationData) do
     table.insert(lines, line)
-  --   -- lines[#lines + 1] = line
   end
+  return { data = lines, message = 'idk' }
 
-  return { data = lines }
+
+  -- local fileLocationData = '/tmp/locationData.json'
+  -- local file = io.open(fileLocationData, 'r')
+
+  -- if file == nil then
+  --     speedtest.getLocation()
+  -- else
+  --     io.close(file)
+  -- end
+  -- -- -- Here we read each line in a file and add the read lines to our
+  -- -- -- lines empty table
+  -- local lines = {}
+  -- for line in io.lines(fileLocationData) do
+  --   table.insert(lines, line)
+  -- --   -- lines[#lines + 1] = line
+  -- end
+
+  -- return { data = lines }
+end
+
+-- function M.get_location_data()
+--   -- local status, table = pcall(speedtest.getLocation)
+--   -- if status == true then
+--   --   return { data = table }
+--   -- else
+--   --   return { data = 'something went wrong' }
+--   -- end
+
+--   local table = {}
+--   local c = cURL.easy {
+--     url = string.format('http://api.ipstack.com/check?access_key=%s', apiToken)
+--   }
+--   c:setopt_writefunction(table.insert, table)
+--   c:perform()
+--   c:close()
+--   return { data = 'ddd'}
+--   -- return { data = table.concat(table) }
+--   -- :perform()
+--   -- :close()
+--   -- print('does this work')
+--   -- for _, v in pairs(table) do
+--   --   print(v)
+--   -- end
+--   -- return { data = table }
+-- end
+
+function M.testas()
+  local lel = 'vienas'
+  return { connected = true }
 end
 
 function M.check_connection_status(params)
@@ -52,37 +96,21 @@ function M.get_all_servers()
   return { data = table.concat(lines) }
 end
 
-
 function M.init_best_server_search()
   local results_filename = "/tmp/findServers"
   local results_file = io.open(results_filename, "r")
   if results_file == nil then
     return { message = "No results file found yet"}
   end
-  -- minus nes nenorim kad pirma linija uzsiskaitytu kaip perskaityta linija
-  -- local count = -1
-  -- for _ in io.lines(results_filename) do
-  --   count = count + 1
-  -- end
-  -- palyginam ar pirma linija(servu skaicius) lygi DABAR perskaitytu servu skaiciui
-  -- if tonumber(results_file:read()) == count then
-  --   os.execute('lua /usr/bin/speedtest-backend find_best_server &')
-  --   return { message = true }
-  -- end
-  -- local countFound = tonumber(results_file:read())
-  -- io.close(results_file)
-  -- return { message = false, counted = count, countFound = countFound }
-
   os.execute("lua /usr/bin/speedtest-backend find_best_server &")
   return { message = true }
 end
 
 function M.find_servers(params)
   os.remove("/tmp/findServers")
-  
+
   local results = io.open("/tmp/findServers", "a")
-  results:write(table.getn(params.servers) .. "\n")
-  
+  -- results:write(table.getn(params.servers) .. "\n")
   io.close(results)
   for _, v in pairs(params.servers) do
       os.execute("lua /usr/bin/speedtest-backend find_servers -s " .. v.host .. " &")
@@ -101,6 +129,34 @@ function M.get_best_server()
       table.insert(lines, line)
     end
     return { data = lines, message = 'Selected fastest server' }
+  end
+end
+
+function M.start_download(params)
+  os.remove("/tmp/downloadResult")
+  local download_result = "/tmp/downloadResult"
+  local download_result_file = io.open(download_result, "r")
+  if download_result_file == nil then
+    -- io.close(download_result_file)
+    os.execute("lua /usr/bin/speedtest-backend start_download -s " .. params.server .. " &")
+    return { message = 'Download test started' }
+  else
+    return
+  end
+end
+
+function M.get_download_results()
+  local download_result = "/tmp/downloadResult"
+  local download_result_file = io.open(download_result, "r")
+  if download_result_file ~= nil then
+    io.close(download_result_file)
+    local lines = {}
+    for line in io.lines(download_result) do
+      table.insert(lines, line)
+    end
+    return { data = lines, message = 'Finished download test'}
+    else
+      return { message = "Download result data not yet created"}
   end
 end
 

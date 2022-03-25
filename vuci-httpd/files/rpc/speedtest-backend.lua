@@ -1,5 +1,6 @@
 local cURL = require "cURL"
 local argparse = require "argparse"
+local socket = require "socket"
 
 local parser = argparse('speedtest-cli', 'Speedtest command line interface')
 
@@ -7,19 +8,22 @@ local get_server_list = parser:command('get_server_list', 'Gets all active serve
 
 local get_location = parser:command('get_location', 'Get location data and write it to /tmp/locationData.json')
 
-local find_servers = parser:command("find_servers", "By default selects optimal server from /tmp/filtered_servers file if the file exists")
-find_servers:option("-s --server", "Measures specified server\'s latency")
+local find_servers = parser:command("find_servers", "Checks given servers status code(if its a 200 or 500 status code) and the latency of it and prints the output to /tmp/findServers")
+find_servers:option("-s --server", "Checks servers response code and latency and prints it to a file")
 
 local find_best_server = parser:command('find_best_server', 'Gets the most performant server from the filtered server list of working servers')
 
-local apiToken = 'TOKEN'
+local start_download = parser:command("start_download", "Starts a download test and writes the results to /tmp/downloadResult")
+start_download:option("-s --server", "Performs download test with the given server")
+
+local apiToken = 'token'
 
 local args = parser:parse()
 -- lua /usr/bin/speedtest-backend get_server_list
 
-local TOTAL_TEST_TIME = 10
+local TOTAL_TEST_TIME = 15
 local MAX_RETRIES = 20
-local SIZE = 1000
+local SIZE = 100000000
 local AGENT = "libcurl-speedchecker/1.0"
 
 function GetServers ()
@@ -35,34 +39,26 @@ end
 
 function GetLocation()
   local file = io.open('/tmp/locationData.json', 'w')
+  -- local table = {}
   cURL.easy {
-    url = string.format('api.ipstack.com/check?access_key=%s', apiToken),
+    url = string.format('http://api.ipstack.com/check?access_key=%s', apiToken),
     writefunction = file
   }
   :perform()
   :close()
+  -- return table
   file:close()
 end
 
 function Find_servers()
-  -- if args.count ~= nil and tonumber(args.count) < 
   local f = io.open("/dev/null", "w")
   if args.server ~= nil then
       local results = io.open("/tmp/findServers", "a")
       local status, _, responseCode, total_time = pcall(Measure_latency, f, args.server)
-      -- if not args.quiet then
-      --     print(string.format("%-35s %-15s %-8s", "Server", "Response_code", "Total_time")) 
-      -- end
       if status then
           results:write(args.server .. "," .. responseCode .. "," .. total_time .. "\n")
-          -- if not args.quiet then
-          --     print(string.format("%-35s %-15s %-8s", args.server, code, total_time))
-          -- end
       else
           results:write(args.server .. "," .. 500 .. "," .. -1 .. "\n")
-          -- if not args.quiet then
-          --     print(string.format("%-35s %-15s %-8s", args.server, 500, -1))
-          -- end
       end
       io.close(results)
       return
@@ -161,6 +157,72 @@ function Find_best_server()
   table.sort(servers, function (server1, server2) return server1.total_time < server2.total_time end )
   Write_as_json("/tmp/bestServers", servers)
 end
+
+-- function Progress_function(dltotal, dlnow)
+--   print('inside function')
+--   print(dltotal)
+-- end
+
+function Start_download()
+  local download_filename = "/dev/null"
+  local download_file = io.open(download_filename, "w")
+  if args.server ~= nil then
+    print('starting curl operations')
+    local full_download_url = args.server .. "/download?size=" .. SIZE
+    -- local c = cURL.easy_init()
+    -- c:setopt_url(full_download_url)
+    -- c:setopt_port(8080)
+    -- c:setopt_useragent(AGENT)
+    -- c:setopt_writefunction(download_file)
+    local c = cURL.easy {
+      url = full_download_url,
+      port = 8080,
+      useragent = AGENT,
+      writefunction = download_file
+    }
+    -- local same_value_count = 21
+    local start_time = socket.gettime()
+    -- print(start_time .. "\n")
+    print('next line starts progressfunction')
+    -- c:setopt(cURL.OPT_PROGRESSFUNCTION,
+    --   function(dltotal, dlnow)
+    --     print('inside progress function')
+    --       local test = 'teeest'
+    --   end
+    -- )
+    local test = 'dd'
+    c:setopt_progressfunction(function(dltotal, dlnow)
+      local results_file = io.open("/tmp/downloadResult", "w")
+      local end_time = socket.gettime()
+      local downloaded_size_MB = dlnow / 1000000
+      -- local downloaded_size_mb = dlnow / 131.072
+      local total_time = end_time - start_time
+      if total_time >= TOTAL_TEST_TIME then
+        print('test over')
+        c:close()
+        return
+      end
+      -- local download_speed = downloaded_size_mb * 8 / total_time
+      local download_speed_mb = downloaded_size_MB * 8 / total_time
+      results_file:write(download_speed_mb .. "\n")
+      local total_size_MB = dltotal / 1000000
+      local percent_downloaded = math.floor((dlnow / dltotal * 100) * 100) / 100
+      io.write(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded .. " " .. download_speed_mb .. " " .. total_time .. "\n")
+      
+      io.close(results_file)
+    end)
+    c:setopt(cURL.OPT_NOPROGRESS, false)
+    c:perform()
+    -- local status, _ = pcall(function() c:perform() end)
+    -- print('after setopt_progressfunction')
+    -- print(test)
+    io.close(download_file)
+    -- io.close(results_file)
+  end
+end
+
+if args.start_download then Start_download() end
+-- if args.start_upload then Start_upload() end
 
 if args.find_servers then Find_servers() end
 if args.find_best_server then Find_best_server() end
