@@ -132,17 +132,23 @@ function M.get_best_server()
   end
 end
 
+-- function M.start_download(params)
+--   os.remove("/tmp/downloadResult")
+--   local download_result = "/tmp/downloadResult"
+--   local download_result_file = io.open(download_result, "r")
+--   if download_result_file == nil then
+--     -- io.close(download_result_file)
+--     os.execute("lua /usr/bin/speedtest-backend start_download -s " .. params.server .. " &")
+--     return { message = 'Download test started', hasStarted = true }
+--   else
+--     return
+--   end
+-- end
+
 function M.start_download(params)
   os.remove("/tmp/downloadResult")
-  local download_result = "/tmp/downloadResult"
-  local download_result_file = io.open(download_result, "r")
-  if download_result_file == nil then
-    -- io.close(download_result_file)
-    os.execute("lua /usr/bin/speedtest-backend start_download -s " .. params.server .. " &")
-    return { message = 'Download test started' }
-  else
-    return
-  end
+  os.execute("lua /usr/bin/speedtest-backend start_download -s " .. params.server .. " &")
+  return { message = 'Download test started', hasStarted = true }
 end
 
 function M.get_download_results()
@@ -154,9 +160,30 @@ function M.get_download_results()
     for line in io.lines(download_result) do
       table.insert(lines, line)
     end
-    return { data = lines, message = 'Finished download test'}
+    return { data = lines }
     else
       return { message = "Download result data not yet created"}
+  end
+end
+
+function M.start_upload(params)
+  os.remove("/tmp/uploadResult")
+  os.execute("lua /usr/bin/speedtest-backend start_upload -s " .. params.server .. " &")
+  return { message = 'Upload test started', hasStarted = true }
+end
+
+function M.get_upload_results()
+  local upload_result = "/tmp/uploadResult"
+  local upload_result_file = io.open(upload_result, "r")
+  if upload_result_file ~= nil then
+    io.close(upload_result_file)
+    local lines = {}
+    for line in io.lines(upload_result) do
+      table.insert(lines, line)
+    end
+    return { data = lines }
+    else
+      return { message = "Upload result data not yet created"}
   end
 end
 

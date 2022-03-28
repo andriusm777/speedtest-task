@@ -39,7 +39,12 @@
           <span class="speed-card-title-text">Upload</span>
         </div>
         <div class="speed-card-value">
-          <span class="speed-card-value-text">400</span>
+          <template v-if="this.uploadResult !== ''">
+            <span class="speed-card-value-text">{{this.uploadResult}}</span>
+          </template>
+          <template v-else>
+            <span class="speed-card-value-text">0</span>
+          </template>
         </div>
         <div class="speed-card-unit">
           <span class="speed-card-unit-text">Mbps</span>
@@ -75,35 +80,43 @@ export default {
     return {
       page: 'speedtest',
       hasSpeedtestStarted: false,
+      hasDownloadStarted: false,
+      hasUploadStarted: false,
       isUserConnected: Boolean,
       userLocationData: Object,
       allServers: [],
       filteredServers: Array,
       speedtestStatusMessage: '',
       bestServer: '',
-      downloadResult: ''
+      downloadResult: '',
+      downloadStatus: '',
+      uploadResult: '',
+      uploadStatus: ''
     }
+  },
+  timers: {
+    getDownloadResults: { time: 900, autostart: false, immediate: true, repeat: true },
+    getUploadResults: { time: 900, autostart: false, immediate: true, repeat: true }
   },
   methods: {
     startSpeedtest () {
       this.downloadResult = ''
+      this.uploadResult = ''
+      this.bestServer = ''
+      this.hasDownloadStarted = false
+      this.hasUploadStarted = false
       this.hasSpeedtestStarted = true
       this.userConnectionStatus()
       this.getLocation()
       this.waitForAction(() => this.isUserConnected !== false && this.userLocationData !== null).then(() => {
-        // alert('user connected!')
         if ( this.allServers.length === 0 ) {
           this.getServers()
         }
         this.waitForAction(() => this.allServers.length !== 0).then(() => {
           // find servers
           this.startServerOperations(this.filteredServersCountry)
-
-          this.waitForAction(() => this.bestServer !== '').then(() => {
-            this.startDownloadTest(this.bestServer)
-            setTimeout(() => this.getDownloadResults(), 10000)
-          })
-
+          
+          
         })
       })
     },
@@ -114,10 +127,6 @@ export default {
         console.log(response.data)
         console.log(JSON.parse(response.data))
         this.userLocationData = JSON.parse(response.data)
-      })
-      console.log('testas rpc')
-      this.$rpc.call('speedtest-api', 'testas', { }).then((response) => {
-        console.log(response)
       })
     },
     userConnectionStatus () {
@@ -150,20 +159,78 @@ export default {
       this.$rpc.call('speedtest-api', 'start_download', { server }).then((response) => {
         console.log(response.message)
         this.speedtestStatusMessage = response.message
+        this.hasDownloadStarted = response.hasStarted
+      })
+    },
+    startUploadTest (server) {
+      this.$rpc.call('speedtest-api', 'start_upload', { server }).then((response) => {
+        console.log(response.message)
+        this.speedtestStatusMessage = response.message
+        this.hasUploadStarted = response.hasStarted
+      })
+    },
+    getUploadResults () {
+      this.$rpc.call('speedtest-api', 'get_upload_results').then((response) => {
+        console.log(response)
+        if(response.data[0] === null) {
+          return
+        } else {
+          const responseData = response.data[0]
+          const dataArray = responseData.split(',')
+          console.log(dataArray)
+          const uploadData = parseInt(dataArray[1])
+          this.uploadResult = uploadData.toFixed(1)
+          this.uploadStatus = dataArray[0]
+          if (dataArray[0] === 'done') {
+            this.speedtestStatusMessage = 'Upload test finished'
+            this.$timer.stop('getUploadResults')
+            // setTimeout(this.startUploadTest(this.bestServer), 800)
+          } else if (dataArray[0] === 'processing') {
+            this.speedtestStatusMessage = 'Upload being processed'
+          }
+        }
       })
     },
     getDownloadResults () {
       this.$rpc.call('speedtest-api', 'get_download_results').then((response) => {
         console.log(response)
-        this.speedtestStatusMessage = response.message
-        const downloadData = parseInt(response.data[0])
-        this.downloadResult = downloadData.toFixed(1)
+        if(response.data[0] === null) {
+          return
+        } else {
+          const responseData = response.data[0]
+          const dataArray = responseData.split(',')
+          console.log(dataArray)
+          const downloadData = parseInt(dataArray[1])
+          this.downloadResult = downloadData.toFixed(1)
+          this.downloadStatus = dataArray[0]
+          if (this.downloadStatus === 'done') {
+            this.speedtestStatusMessage = 'Download test finished'
+            this.$timer.stop('getDownloadResults')
+            // setTimeout(this.startUploadTest(this.bestServer), 800)
+          } else if (this.downloadStatus === 'processing') {
+            this.speedtestStatusMessage = 'Download being processed'
+          }
+        }
       })
     },
     startServerOperations (servers) {
       this.$rpc.call('speedtest-api', 'find_servers', { servers }).then((response) => {
         this.speedtestStatusMessage = response.message
         this.findBestServer()
+
+        this.waitForAction(() => this.bestServer !== '').then(() => {
+          this.startDownloadTest(this.bestServer)
+          this.waitForAction(() => this.hasDownloadStarted === true).then(() => {
+            this.$timer.start('getDownloadResults')
+          })
+          this.waitForAction(() => this.downloadStatus === 'done').then(() => {
+            this.downloadStatus === ''
+            this.startUploadTest(this.bestServer)
+            this.waitForAction(() => this.hasUploadStarted === true).then(() => {
+              this.$timer.start('getUploadResults')
+            })
+          })
+        })
       })
     },
     findBestServer () {

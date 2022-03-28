@@ -1,6 +1,7 @@
 local cURL = require "cURL"
 local argparse = require "argparse"
 local socket = require "socket"
+local os = require "os"
 
 local parser = argparse('speedtest-cli', 'Speedtest command line interface')
 
@@ -16,7 +17,10 @@ local find_best_server = parser:command('find_best_server', 'Gets the most perfo
 local start_download = parser:command("start_download", "Starts a download test and writes the results to /tmp/downloadResult")
 start_download:option("-s --server", "Performs download test with the given server")
 
-local apiToken = 'token'
+local start_upload = parser:command("start_upload", "Starts an upload test and writes the results to /tmp/uploadResult")
+start_upload:option("-s --server", "Performs an upload test with the given server")
+
+local apiToken = 'TOKEN'
 
 local args = parser:parse()
 -- lua /usr/bin/speedtest-backend get_server_list
@@ -158,62 +162,125 @@ function Find_best_server()
   Write_as_json("/tmp/bestServers", servers)
 end
 
--- function Progress_function(dltotal, dlnow)
---   print('inside function')
---   print(dltotal)
--- end
+function Start_upload()
+  os.remove("/tmp/uploadResult")
+  local upload_filename = "/dev/zero"
+  if args.server ~= nil then
+    local full_upload_url = args.server .. "/upload"
+    -- GOOD
+    local c = cURL.easy {
+      url = full_upload_url,
+      post = true,
+      port = 8080,
+      useragent = AGENT,
+      httppost = cURL.form {
+        file0 = {
+          file = upload_filename,
+          type = "text/plain",
+          name = "fileToUpload.txt",
+        }
+      }
+    }
+    local start_time = socket.gettime()
+  
+    c:setopt_progressfunction(function(_, _, ultotal, ulnow)
+      local results_file = io.open("/tmp/uploadResult", "w")
+      local end_time = socket.gettime()
+      local uploaded_size_MB = ulnow / 1000000
+      local total_time = end_time - start_time
+      local upload_speed_mb = uploaded_size_MB * 8 / total_time
+      local total_size_MB = ultotal / 1000000
+      local percent_uploaded = math.floor((ulnow / ultotal * 100) * 100) / 100
+      io.write(ulnow .. " " .. args.server .. " " .. total_size_MB .. " " .. uploaded_size_MB .. " " .. percent_uploaded .. " " .. upload_speed_mb .. " " .. total_time .. "\n")
+
+      local out = io.open("/tmp/uploadResult", "r")
+      local resultsTable = {}
+
+      for line in out:lines() do
+        table.insert(resultsTable, line)
+      end
+
+      out:close()
+      
+      if total_time < TOTAL_TEST_TIME then
+        table.insert(resultsTable, 1, 'processing' .. ',' .. upload_speed_mb)
+        for _, line in ipairs(resultsTable) do
+          results_file:write(line)
+        end
+        io.close(results_file)
+        
+      end
+
+      if total_time >= TOTAL_TEST_TIME then
+        local results_file = io.open("/tmp/uploadResult", "w")
+        table.insert(resultsTable, 1, 'done' .. ',' .. upload_speed_mb)
+        for _, line in ipairs(resultsTable) do
+          results_file:write(line)
+        end
+        io.close(results_file)
+        return 0
+      end
+    end)
+    c:setopt(cURL.OPT_NOPROGRESS, false)
+    local status, error = pcall(function() c:perform() end)
+  end
+end
 
 function Start_download()
   local download_filename = "/dev/null"
   local download_file = io.open(download_filename, "w")
   if args.server ~= nil then
-    print('starting curl operations')
     local full_download_url = args.server .. "/download?size=" .. SIZE
-    -- local c = cURL.easy_init()
-    -- c:setopt_url(full_download_url)
-    -- c:setopt_port(8080)
-    -- c:setopt_useragent(AGENT)
-    -- c:setopt_writefunction(download_file)
     local c = cURL.easy {
       url = full_download_url,
       port = 8080,
       useragent = AGENT,
       writefunction = download_file
     }
-    -- local same_value_count = 21
     local start_time = socket.gettime()
-    -- print(start_time .. "\n")
-    print('next line starts progressfunction')
-    -- c:setopt(cURL.OPT_PROGRESSFUNCTION,
-    --   function(dltotal, dlnow)
-    --     print('inside progress function')
-    --       local test = 'teeest'
-    --   end
-    -- )
-    local test = 'dd'
+    
     c:setopt_progressfunction(function(dltotal, dlnow)
       local results_file = io.open("/tmp/downloadResult", "w")
       local end_time = socket.gettime()
       local downloaded_size_MB = dlnow / 1000000
       -- local downloaded_size_mb = dlnow / 131.072
       local total_time = end_time - start_time
-      if total_time >= TOTAL_TEST_TIME then
-        print('test over')
-        c:close()
-        return
-      end
       -- local download_speed = downloaded_size_mb * 8 / total_time
       local download_speed_mb = downloaded_size_MB * 8 / total_time
-      results_file:write(download_speed_mb .. "\n")
       local total_size_MB = dltotal / 1000000
       local percent_downloaded = math.floor((dlnow / dltotal * 100) * 100) / 100
       io.write(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded .. " " .. download_speed_mb .. " " .. total_time .. "\n")
+      local out = io.open("/tmp/downloadResult", "r")
+      local resultsTable = {}
+
+      for line in out:lines() do
+        table.insert(resultsTable, line)
+      end
+
+      out:close()
       
-      io.close(results_file)
+      if dlnow < 100000000 and total_time < TOTAL_TEST_TIME then
+        table.insert(resultsTable, 1, 'processing' .. ',' .. download_speed_mb)
+        for _, line in ipairs(resultsTable) do
+          results_file:write(line)
+        end
+        io.close(results_file)
+        
+      end
+
+      if dlnow == 100000000 or total_time >= TOTAL_TEST_TIME then
+        local results_file = io.open("/tmp/downloadResult", "w")
+        table.insert(resultsTable, 1, 'done' .. ',' .. download_speed_mb)
+        for _, line in ipairs(resultsTable) do
+          results_file:write(line)
+        end
+        io.close(results_file)
+        return 0
+      end
     end)
     c:setopt(cURL.OPT_NOPROGRESS, false)
-    c:perform()
-    -- local status, _ = pcall(function() c:perform() end)
+    -- assert(c:perform())
+    local status, error = pcall(function() c:perform() end)
     -- print('after setopt_progressfunction')
     -- print(test)
     io.close(download_file)
@@ -222,7 +289,7 @@ function Start_download()
 end
 
 if args.start_download then Start_download() end
--- if args.start_upload then Start_upload() end
+if args.start_upload then Start_upload() end
 
 if args.find_servers then Find_servers() end
 if args.find_best_server then Find_best_server() end
