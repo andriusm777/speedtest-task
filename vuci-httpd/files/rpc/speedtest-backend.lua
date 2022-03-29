@@ -145,22 +145,21 @@ function Find_best_server()
   local count = 0
   for line in io.lines(filename) do
       count = count + 1
-      -- neskaitom pacios pirmos eilutes
       if count > 1 then
-          -- vienos eilutes string "vienas,du,trys" atskiria per kableli ir ideda i table { [1]'vienas',[2]'du',[3]'trys' }
+          -- reads item,item,item from a given file and inserts read lines into a table with the following formatting { [1]'item',[2]'item',[3]'item' }
           local data = Split(line, ",")
           if data[2] == "200" then
               table.insert(servers, {server = data[1], code = data[2], total_time = data[3]})
           end
       end
   end
-  -- su maziausia reiksme gauname paciam virsuj ir galim nusiskaityti su [0] per vue
+  -- the fastest server goes to the top and we read it by using [0] within vue
   table.sort(servers, function (server1, server2) return server1.total_time < server2.total_time end )
   Write_as_json("/tmp/bestServers", servers)
 end
 
 function Start_upload()
-  os.remove("/tmp/uploadResult")
+  os.remove('/tmp/uploadResult')
   local upload_filename = "/dev/zero"
   if args.server ~= nil then
     local full_upload_url = args.server .. "/upload"
@@ -181,14 +180,15 @@ function Start_upload()
   
     c:setopt_progressfunction(function(_, _, ultotal, ulnow)
       local results_file = io.open("/tmp/uploadResult", "w")
+      -- Upload gets limited to 100000000 bytes(100 MB) so we could calculate the percentage
+      ultotal = 100000000
       local end_time = socket.gettime()
       local uploaded_size_MB = ulnow / 1000000
       local total_time = end_time - start_time
       local upload_speed_mb = uploaded_size_MB * 8 / total_time
       local total_size_MB = ultotal / 1000000
-      -- local percent_uploaded = math.floor((ulnow / ultotal * 100) * 100) / 100
-      local percent_uploadedNew = ( ulnow / ulnow * 5 ) * 100
-      io.write(ulnow .. " " .. args.server .. " " .. total_size_MB .. " " .. uploaded_size_MB .. " " .. percent_uploadedNew .. " " .. upload_speed_mb .. " " .. total_time .. "\n")
+      local percent_uploaded = ( ulnow / ultotal ) * 100
+      print(ulnow .. " " .. args.server .. " " .. total_size_MB .. " " .. uploaded_size_MB .. " " .. percent_uploaded .. " " .. upload_speed_mb .. " " .. total_time .. "\n")
 
       local out = io.open("/tmp/uploadResult", "r")
       local resultsTable = {}
@@ -199,24 +199,25 @@ function Start_upload()
 
       out:close()
       
-      if total_time < TOTAL_TEST_TIME then
-        table.insert(resultsTable, 1, 'processing' .. ',' .. upload_speed_mb)
+      if ulnow < 100000000 and total_time < TOTAL_TEST_TIME then
+        table.insert(resultsTable, 1, 'processing' .. ',' .. upload_speed_mb .. ',' .. percent_uploaded)
         for _, line in ipairs(resultsTable) do
           results_file:write(line)
         end
         io.close(results_file)
         
       end
-
-      if total_time >= TOTAL_TEST_TIME then
+      
+      if ulnow >= 100000000 or total_time >= TOTAL_TEST_TIME then
         local results_file = io.open("/tmp/uploadResult", "w")
-        table.insert(resultsTable, 1, 'done' .. ',' .. upload_speed_mb)
+        table.insert(resultsTable, 1, 'done' .. ',' .. upload_speed_mb .. ',' .. percent_uploaded)
         for _, line in ipairs(resultsTable) do
           results_file:write(line)
         end
         io.close(results_file)
         return 0
       end
+
     end)
     c:setopt(cURL.OPT_NOPROGRESS, false)
     local status, error = pcall(function() c:perform() end)
@@ -240,14 +241,11 @@ function Start_download()
       local results_file = io.open("/tmp/downloadResult", "w")
       local end_time = socket.gettime()
       local downloaded_size_MB = dlnow / 1000000
-      -- local downloaded_size_mb = dlnow / 131.072
       local total_time = end_time - start_time
-      -- local download_speed = downloaded_size_mb * 8 / total_time
       local download_speed_mb = downloaded_size_MB * 8 / total_time
       local total_size_MB = dltotal / 1000000
-      -- local percent_downloaded = math.floor((dlnow / dltotal * 100) * 100) / 100
       local percent_downloaded = ( dlnow / dltotal ) * 100
-      io.write(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded  .. " " .. download_speed_mb .. " " .. total_time .. "\n")
+      print(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded  .. " " .. download_speed_mb .. " " .. total_time .. "\n")
       local out = io.open("/tmp/downloadResult", "r")
       local resultsTable = {}
 
@@ -258,7 +256,7 @@ function Start_download()
       out:close()
       
       if dlnow < 100000000 and total_time < TOTAL_TEST_TIME then
-        table.insert(resultsTable, 1, 'processing' .. ',' .. download_speed_mb)
+        table.insert(resultsTable, 1, 'processing' .. ',' .. download_speed_mb .. ',' .. percent_downloaded)
         for _, line in ipairs(resultsTable) do
           results_file:write(line)
         end
@@ -268,7 +266,7 @@ function Start_download()
 
       if dlnow == 100000000 or total_time >= TOTAL_TEST_TIME then
         local results_file = io.open("/tmp/downloadResult", "w")
-        table.insert(resultsTable, 1, 'done' .. ',' .. download_speed_mb)
+        table.insert(resultsTable, 1, 'done' .. ',' .. download_speed_mb .. ',' .. percent_downloaded)
         for _, line in ipairs(resultsTable) do
           results_file:write(line)
         end
@@ -277,12 +275,8 @@ function Start_download()
       end
     end)
     c:setopt(cURL.OPT_NOPROGRESS, false)
-    -- assert(c:perform())
     local status, error = pcall(function() c:perform() end)
-    -- print('after setopt_progressfunction')
-    -- print(test)
     io.close(download_file)
-    -- io.close(results_file)
   end
 end
 

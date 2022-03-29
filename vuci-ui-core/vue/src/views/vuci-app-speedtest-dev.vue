@@ -56,13 +56,40 @@
       <span v-else>Start speedtest</span>
     </div>
     <div class="speed-speedometer">
-      <a-progress type="circle" :percent="100" :width="200"/>
+      <a-progress v-if="this.hasDownloadFinished === false"
+        stroke-linecap="square"
+        strokeColor="#108ee9"
+        :percent="this.downloadPercent"
+        :width="200"
+        :showInfo="false"
+        type="dashboard"
+      />
+
+      <a-progress v-if="this.hasDownloadFinished === true"
+        stroke-linecap="square"
+        strokeColor="#87d068"
+        :percent="uploadPercentAdjust()"
+        :width="200"
+        :showInfo="false"
+        type="dashboard"
+      />
     </div>
+    <template>
+      <div class="speed-card-unit-text speed-speedometer-inside">
+        <span v-if="this.downloadResult === '' && this.uploadResult === '' || this.hasDownloadFinished === true && this.hasUploadFinished === true">0 </span>
+        <template v-if="this.hasDownloadStarted === true && this.hasDownloadFinished == false">
+          <span>{{this.downloadResult}} </span>
+        </template>
+        <template v-if="this.hasUploadStarted == true && this.hasUploadFinished == false">
+          <span>{{this.uploadResult}} </span>
+        </template>
+        Mbps
+      </div>
+    </template>
 
     <div class="speed-actions">
       <a-button :disabled="!isUserConnected" shape="round" size="large" type="primary" ghost @click="startSpeedtest">Start</a-button>
 
-      <a-button :disabled="!isUserConnected" shape="round" size="large" @click="startSpeedtest">Servers</a-button>
     </div>
 
     <div v-if="!isUserConnected" class="pre-speed-error">
@@ -90,7 +117,11 @@ export default {
       downloadResult: '',
       downloadStatus: '',
       uploadResult: '',
-      uploadStatus: ''
+      uploadStatus: '',
+      downloadPercent: 0,
+      uploadPercent: 0,
+      hasDownloadFinished: false,
+      hasUploadFinished: false
     }
   },
   timers: {
@@ -102,22 +133,30 @@ export default {
       this.downloadResult = ''
       this.uploadResult = ''
       this.bestServer = ''
+      this.downloadPercent = 0
+      this.uploadPercent = 0
       this.hasDownloadStarted = false
       this.hasUploadStarted = false
+      this.hasUploadFinished = false
+      this.hasDownloadFinished = false
       this.hasSpeedtestStarted = true
       this.userConnectionStatus()
       this.getLocation()
       this.waitForAction(() => this.isUserConnected !== false && this.userLocationData !== null).then(() => {
-        if ( this.allServers.length === 0 ) {
+        if (this.allServers.length === 0) {
           this.getServers()
         }
         this.waitForAction(() => this.allServers.length !== 0).then(() => {
-          // find servers
           this.startServerOperations(this.filteredServersCountry)
-
-          
         })
       })
+    },
+    uploadPercentAdjust () {
+      if (this.downloadStatus === 'done' && this.uploadStatus === 'done') {
+        // eslint-disable-next-line
+        setTimeout(() => this.uploadPercent = 0, 800)
+      }
+      return this.uploadPercent
     },
     getLocation () {
       console.log('checking location')
@@ -171,19 +210,22 @@ export default {
     getUploadResults () {
       this.$rpc.call('speedtest-api', 'get_upload_results').then((response) => {
         console.log(response)
-        if(response.data[0] === null) {
+        if (response.data[0] === null) {
+          // eslint-disable-next-line
           return
         } else if (response.data.length !== 0) {
           const responseData = response.data[0]
           const dataArray = responseData.split(',')
           console.log(dataArray)
           const uploadData = parseFloat(dataArray[1])
+          const uploadPercent = parseInt(dataArray[2])
+          this.uploadPercent = uploadPercent
           this.uploadResult = uploadData.toFixed(2)
           this.uploadStatus = dataArray[0]
           if (dataArray[0] === 'done') {
             this.speedtestStatusMessage = 'Upload test finished'
             this.$timer.stop('getUploadResults')
-            // setTimeout(this.startUploadTest(this.bestServer), 800)
+            this.hasUploadFinished = true
           } else if (dataArray[0] === 'processing') {
             this.speedtestStatusMessage = 'Upload being processed'
           }
@@ -193,18 +235,22 @@ export default {
     getDownloadResults () {
       this.$rpc.call('speedtest-api', 'get_download_results').then((response) => {
         console.log(response)
-        if(response.data[0] === null) {
+        if (response.data[0] === null) {
+          // eslint-disable-next-line
           return
         } else if (response.data.length !== 0) {
           const responseData = response.data[0]
           const dataArray = responseData.split(',')
           console.log(dataArray)
           const downloadData = parseFloat(dataArray[1])
+          const downloadPercent = parseInt(dataArray[2])
+          this.downloadPercent = downloadPercent
           this.downloadResult = downloadData.toFixed(2)
           this.downloadStatus = dataArray[0]
           if (this.downloadStatus === 'done') {
             this.speedtestStatusMessage = 'Download test finished'
             this.$timer.stop('getDownloadResults')
+            this.hasDownloadFinished = true
             // setTimeout(this.startUploadTest(this.bestServer), 800)
           } else if (this.downloadStatus === 'processing') {
             this.speedtestStatusMessage = 'Download being processed'
@@ -222,8 +268,7 @@ export default {
           this.waitForAction(() => this.hasDownloadStarted === true).then(() => {
             this.$timer.start('getDownloadResults')
 
-            this.waitForAction(() => this.downloadStatus === 'done').then(() => {
-              this.downloadStatus === ''
+            this.waitForAction(() => this.hasDownloadFinished === true).then(() => {
               this.startUploadTest(this.bestServer)
               this.waitForAction(() => this.hasUploadStarted === true).then(() => {
                 this.$timer.start('getUploadResults')
@@ -252,19 +297,24 @@ export default {
     }
   },
   computed: {
-    filteredServersCountry() {
+    filteredServersCountry () {
       return this.allServers.filter(provider => provider.country === this.userLocationData.country_name)
     }
-  },
-  // created () {
-  //   // this.getServers()
-  //   // this.userConnectionStatus()
-  // }
+  }
 }
 
 </script>
 
 <style scoped>
+  .meter {
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    z-index:1;
+  }
+
   .container {
     margin: 0 auto;
     height: 100%;
@@ -327,6 +377,10 @@ export default {
     justify-content: center;
   }
 
+  .speed-speedometer-inside {
+    margin-top: -50px;
+  }
+
   /* ACTIONS */
 
   .speed-actions {
@@ -334,32 +388,16 @@ export default {
     align-items: center;
     justify-content: space-between;
     column-gap: 50px;
+    margin-top: 15px;
   }
 
   /* PRE SPEEDTEST START SECTION */
-
-  .pre-speed-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    row-gap: 15px;
-  }
 
   .pre-speed-title {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-  }
-
-  .pre-speed-title-main {
-    font-size: 25px;
-    font-weight: bold;
-    margin-bottom: 5px;
-  }
-
-  .pre-speed-title-desc {
-    margin-bottom: 10px;
   }
 
   .pre-speed-user-data {
