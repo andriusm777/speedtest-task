@@ -1,4 +1,3 @@
-local cURL = require "cURL"
 local speedtest = require "speedtest-dev"
 
 local M = {}
@@ -6,67 +5,16 @@ local M = {}
 function M.get_location_data()
   local fileLocationData = '/tmp/locationData.json'
   local file = io.open(fileLocationData, 'r')
-
   if file == nil then
       os.execute("lua /usr/bin/speedtest-backend get_location")
   end
-
   local lines = {}
   for line in io.lines(fileLocationData) do
     table.insert(lines, line)
   end
   return { data = lines, message = 'idk' }
-
-
-  -- local fileLocationData = '/tmp/locationData.json'
-  -- local file = io.open(fileLocationData, 'r')
-
-  -- if file == nil then
-  --     speedtest.getLocation()
-  -- else
-  --     io.close(file)
-  -- end
-  -- -- -- Here we read each line in a file and add the read lines to our
-  -- -- -- lines empty table
-  -- local lines = {}
-  -- for line in io.lines(fileLocationData) do
-  --   table.insert(lines, line)
-  -- --   -- lines[#lines + 1] = line
-  -- end
-
-  -- return { data = lines }
 end
 
--- function M.get_location_data()
---   -- local status, table = pcall(speedtest.getLocation)
---   -- if status == true then
---   --   return { data = table }
---   -- else
---   --   return { data = 'something went wrong' }
---   -- end
-
---   local table = {}
---   local c = cURL.easy {
---     url = string.format('http://api.ipstack.com/check?access_key=%s', apiToken)
---   }
---   c:setopt_writefunction(table.insert, table)
---   c:perform()
---   c:close()
---   return { data = 'ddd'}
---   -- return { data = table.concat(table) }
---   -- :perform()
---   -- :close()
---   -- print('does this work')
---   -- for _, v in pairs(table) do
---   --   print(v)
---   -- end
---   -- return { data = table }
--- end
-
-function M.testas()
-  local lel = 'vienas'
-  return { connected = true }
-end
 
 function M.check_connection_status(params)
   local status, responseCode = pcall(speedtest.connectionStatus, params.server)
@@ -110,7 +58,6 @@ function M.find_servers(params)
   os.remove("/tmp/findServers")
 
   local results = io.open("/tmp/findServers", "a")
-  -- results:write(table.getn(params.servers) .. "\n")
   io.close(results)
   for _, v in pairs(params.servers) do
       os.execute("lua /usr/bin/speedtest-backend find_servers -s " .. v.host .. " &")
@@ -131,19 +78,6 @@ function M.get_best_server()
     return { data = lines, message = 'Selected fastest server' }
   end
 end
-
--- function M.start_download(params)
---   os.remove("/tmp/downloadResult")
---   local download_result = "/tmp/downloadResult"
---   local download_result_file = io.open(download_result, "r")
---   if download_result_file == nil then
---     -- io.close(download_result_file)
---     os.execute("lua /usr/bin/speedtest-backend start_download -s " .. params.server .. " &")
---     return { message = 'Download test started', hasStarted = true }
---   else
---     return
---   end
--- end
 
 function M.start_download(params)
   os.remove("/tmp/downloadResult")

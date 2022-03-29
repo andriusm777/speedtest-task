@@ -78,7 +78,6 @@
 export default {
   data () {
     return {
-      page: 'speedtest',
       hasSpeedtestStarted: false,
       hasDownloadStarted: false,
       hasUploadStarted: false,
@@ -115,7 +114,7 @@ export default {
         this.waitForAction(() => this.allServers.length !== 0).then(() => {
           // find servers
           this.startServerOperations(this.filteredServersCountry)
-          
+
           
         })
       })
@@ -174,12 +173,12 @@ export default {
         console.log(response)
         if(response.data[0] === null) {
           return
-        } else {
+        } else if (response.data.length !== 0) {
           const responseData = response.data[0]
           const dataArray = responseData.split(',')
           console.log(dataArray)
-          const uploadData = parseInt(dataArray[1])
-          this.uploadResult = uploadData.toFixed(1)
+          const uploadData = parseFloat(dataArray[1])
+          this.uploadResult = uploadData.toFixed(2)
           this.uploadStatus = dataArray[0]
           if (dataArray[0] === 'done') {
             this.speedtestStatusMessage = 'Upload test finished'
@@ -196,12 +195,12 @@ export default {
         console.log(response)
         if(response.data[0] === null) {
           return
-        } else {
+        } else if (response.data.length !== 0) {
           const responseData = response.data[0]
           const dataArray = responseData.split(',')
           console.log(dataArray)
-          const downloadData = parseInt(dataArray[1])
-          this.downloadResult = downloadData.toFixed(1)
+          const downloadData = parseFloat(dataArray[1])
+          this.downloadResult = downloadData.toFixed(2)
           this.downloadStatus = dataArray[0]
           if (this.downloadStatus === 'done') {
             this.speedtestStatusMessage = 'Download test finished'
@@ -222,12 +221,13 @@ export default {
           this.startDownloadTest(this.bestServer)
           this.waitForAction(() => this.hasDownloadStarted === true).then(() => {
             this.$timer.start('getDownloadResults')
-          })
-          this.waitForAction(() => this.downloadStatus === 'done').then(() => {
-            this.downloadStatus === ''
-            this.startUploadTest(this.bestServer)
-            this.waitForAction(() => this.hasUploadStarted === true).then(() => {
-              this.$timer.start('getUploadResults')
+
+            this.waitForAction(() => this.downloadStatus === 'done').then(() => {
+              this.downloadStatus === ''
+              this.startUploadTest(this.bestServer)
+              this.waitForAction(() => this.hasUploadStarted === true).then(() => {
+                this.$timer.start('getUploadResults')
+              })
             })
           })
         })

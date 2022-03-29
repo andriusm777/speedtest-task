@@ -23,7 +23,6 @@ start_upload:option("-s --server", "Performs an upload test with the given serve
 local apiToken = 'TOKEN'
 
 local args = parser:parse()
--- lua /usr/bin/speedtest-backend get_server_list
 
 local TOTAL_TEST_TIME = 15
 local MAX_RETRIES = 20
@@ -43,14 +42,12 @@ end
 
 function GetLocation()
   local file = io.open('/tmp/locationData.json', 'w')
-  -- local table = {}
   cURL.easy {
     url = string.format('http://api.ipstack.com/check?access_key=%s', apiToken),
     writefunction = file
   }
   :perform()
   :close()
-  -- return table
   file:close()
 end
 
@@ -167,7 +164,6 @@ function Start_upload()
   local upload_filename = "/dev/zero"
   if args.server ~= nil then
     local full_upload_url = args.server .. "/upload"
-    -- GOOD
     local c = cURL.easy {
       url = full_upload_url,
       post = true,
@@ -190,8 +186,9 @@ function Start_upload()
       local total_time = end_time - start_time
       local upload_speed_mb = uploaded_size_MB * 8 / total_time
       local total_size_MB = ultotal / 1000000
-      local percent_uploaded = math.floor((ulnow / ultotal * 100) * 100) / 100
-      io.write(ulnow .. " " .. args.server .. " " .. total_size_MB .. " " .. uploaded_size_MB .. " " .. percent_uploaded .. " " .. upload_speed_mb .. " " .. total_time .. "\n")
+      -- local percent_uploaded = math.floor((ulnow / ultotal * 100) * 100) / 100
+      local percent_uploadedNew = ( ulnow / ulnow * 5 ) * 100
+      io.write(ulnow .. " " .. args.server .. " " .. total_size_MB .. " " .. uploaded_size_MB .. " " .. percent_uploadedNew .. " " .. upload_speed_mb .. " " .. total_time .. "\n")
 
       local out = io.open("/tmp/uploadResult", "r")
       local resultsTable = {}
@@ -248,8 +245,9 @@ function Start_download()
       -- local download_speed = downloaded_size_mb * 8 / total_time
       local download_speed_mb = downloaded_size_MB * 8 / total_time
       local total_size_MB = dltotal / 1000000
-      local percent_downloaded = math.floor((dlnow / dltotal * 100) * 100) / 100
-      io.write(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded .. " " .. download_speed_mb .. " " .. total_time .. "\n")
+      -- local percent_downloaded = math.floor((dlnow / dltotal * 100) * 100) / 100
+      local percent_downloaded = ( dlnow / dltotal ) * 100
+      io.write(dlnow .. " " .. args.server .. " " .. total_size_MB .. " " .. downloaded_size_MB .. " " .. percent_downloaded  .. " " .. download_speed_mb .. " " .. total_time .. "\n")
       local out = io.open("/tmp/downloadResult", "r")
       local resultsTable = {}
 
